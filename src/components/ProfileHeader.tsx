@@ -4,8 +4,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import EditModal, { FormField, FormInput, FormTextarea, SaveButton } from "./EditModal";
 import type { Tables } from "@/integrations/supabase/types";
-import coverImg from "@/assets/cover-default.jpg";
-import avatarImg from "@/assets/avatar-default.jpg";
+const coverImg = "/placeholder.svg";
+const avatarImg = "/placeholder.svg";
 
 interface Props {
   profile: Tables<"profiles"> | null;

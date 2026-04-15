@@ -55,7 +55,7 @@ const AddPlatformPage = () => {
             // Store streak data
             const updates = [];
             if (data.data.github && githubUrl) {
-              updates.push(supabase.from("streaks").upsert({
+              updates.push((supabase as any).from("streaks").upsert({
                 user_id: user.id,
                 platform: "github",
                 streak_days: data.data.github.streak,
@@ -68,7 +68,7 @@ const AddPlatformPage = () => {
               }, { onConflict: "user_id,platform" }));
             }
             if (data.data.leetcode && leetcodeUrl) {
-              updates.push(supabase.from("streaks").upsert({
+              updates.push((supabase as any).from("streaks").upsert({
                 user_id: user.id,
                 platform: "leetcode",
                 streak_days: data.data.leetcode.streak,
