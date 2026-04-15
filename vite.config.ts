@@ -16,11 +16,8 @@ export default defineConfig({
     react(),
   ],
   resolve: {
-    alias: [
-      {
-        find: /^@\/(.*)/,
-        replacement: path.resolve(__dirname, "src/$1"),
-      },
-    ],
+    alias: {
+      "@": path.join(__dirname, "src"),
+    },
   },
 });
