@@ -37,7 +37,6 @@ export const useStreakData = () => {
 
       if (!profile) throw new Error("Profile not found");
 
-      // Call the streak edge function
       const { data, error } = await supabase.functions.invoke("fetch-streak", {
         body: {
           github_url: profile.github_url,
@@ -57,10 +56,10 @@ export const useStreakData = () => {
       }
 
       // Store streak data in DB
-      const streakUpdates = [];
+      const streakUpdates: Promise<any>[] = [];
       if (data.data.github) {
         streakUpdates.push(
-          supabase.from("streaks").upsert({
+          (supabase as any).from("streaks").upsert({
             user_id: user.id,
             platform: "github",
             streak_days: data.data.github.streak,
@@ -75,7 +74,7 @@ export const useStreakData = () => {
       }
       if (data.data.leetcode) {
         streakUpdates.push(
-          supabase.from("streaks").upsert({
+          (supabase as any).from("streaks").upsert({
             user_id: user.id,
             platform: "leetcode",
             streak_days: data.data.leetcode.streak,
@@ -90,7 +89,6 @@ export const useStreakData = () => {
       }
       await Promise.all(streakUpdates);
 
-      // Trigger rank recalculation
       supabase.functions.invoke("calculate-rank", { body: { user_id: user.id } }).catch(console.error);
 
       return data.data;

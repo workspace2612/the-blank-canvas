@@ -18,28 +18,27 @@ export function useUserRank() {
     queryFn: async (): Promise<RankData | null> => {
       if (!user) return null;
 
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("candidate_ranks")
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (!data) {
-        // Trigger rank calculation
         await supabase.functions.invoke("calculate-rank", {
           body: { user_id: user.id },
         });
 
-        const { data: newData } = await supabase
+        const { data: newData } = await (supabase as any)
           .from("candidate_ranks")
           .select("*")
           .eq("user_id", user.id)
           .maybeSingle();
 
-        return newData;
+        return newData as RankData | null;
       }
 
-      return data;
+      return data as RankData;
     },
     enabled: !!user,
     staleTime: 5 * 60 * 1000,
@@ -52,7 +51,6 @@ export function useJobRanking() {
       const { data, error } = await supabase.functions.invoke("calculate-rank", {
         body: { job_id },
       });
-
       if (error) throw error;
       return data;
     },
