@@ -1,7 +1,7 @@
-// @ts-nocheck
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "./useProfile";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export interface ATSResult {
@@ -29,7 +29,7 @@ export interface ATSResult {
 
 export function useAtsAnalyzer() {
   const { user } = useAuth();
-  const { profile, skills, experience, projects, education } = useProfile(user?.id);
+  const { profile, skills, experience, projects, education, certificates } = useProfile(user?.id);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ATSResult | null>(null);
 
@@ -41,83 +41,66 @@ export function useAtsAnalyzer() {
 
     setLoading(true);
     try {
-      // Simulate ATS analysis delay
-      await new Promise((r) => setTimeout(r, 2000));
-
-      const demoResult: ATSResult = {
-        ats_score: 72,
-        summary:
-          "Strong technical profile with solid project experience. GitHub activity shows consistent coding patterns. Areas for improvement include expanding certifications and deepening expertise in system design and distributed systems.",
-        profile_summary: {
-          bio: profile.bio || "Professional developer focused on building quality software",
-          top_skills: skills.slice(0, 6).map((s) => s.name),
-          current_projects: projects.slice(0, 2).map((p) => ({
-            name: p.title,
-            description: p.description || "",
-            tech: p.tech_stack || [],
-          })),
-          certifications: {
-            has_certs: education.length > 0,
-            list: education.map((e) => e.degree),
-            summary: education.length > 0 ? "Has relevant education credentials" : "Consider adding certifications",
-          },
-          experience_highlights: experience.slice(0, 3).map((e) => `${e.role} at ${e.company}`),
-        },
-        score_breakdown: [
-          { category: "Skills Quality & Relevance", score: 78, max: 100, detail: "Strong backend stack but missing cloud-native tools" },
-          { category: "Project Depth & Impact", score: 75, max: 100, detail: "Good real-world projects; needs more production-scale systems" },
-          { category: "Work Experience", score: 60, max: 100, detail: String(experience.length) + " roles — solid foundation" },
-          { category: "GitHub Activity", score: 70, max: 100, detail: "Active repos but consider more consistent contributions" },
-          { category: "Coding Practice", score: 80, max: 100, detail: "Good problem-solving track record" },
-          { category: "Certifications & Education", score: 50, max: 100, detail: education.length > 0 ? "Has education background" : "Consider adding credentials" },
-        ],
-        profile_gaps: [
-          { area: "System Design", severity: "high", detail: "No evidence of designing distributed systems. Many senior roles filter for this." },
-          { area: "Cloud & DevOps Certifications", severity: "high", detail: "Consider obtaining AWS or GCP certifications to boost ATS visibility." },
-          { area: "Open Source Contributions", severity: "medium", detail: "Limited OSS activity. Contributing boosts credibility." },
-          { area: "Technical Writing", severity: "medium", detail: "No blog posts or documentation portfolio. Consider creating content." },
-          { area: "CI/CD & Infrastructure", severity: "low", detail: "Consider adding Kubernetes or Terraform experience." },
-        ],
-        strengths: [
-          profile.github_url ? "Active GitHub profile" : "Building online presence",
-          "Diverse skill set",
-          "Project-driven learning",
-          "Professional development experience",
-        ],
-        weaknesses: [
-          education.length === 0 ? "Limited visible credentials" : "Could strengthen certifications",
-          projects.length === 0 ? "No showcase projects" : "Could expand project portfolio",
-          "System design gaps",
-          "Limited open-source contributions",
-        ],
-        consistency_score: 65,
-        recommendations: [
-          "Build a production-grade REST API with comprehensive testing",
-          "Contribute to 2-3 popular open-source projects",
-          "Obtain a cloud platform certification",
-          "Write technical blog posts documenting your architectures",
-          "Practice system design problems regularly",
-        ],
-        learning_roadmap: [
-          "Master containerization and orchestration (Week 1-3)",
-          "Build a microservices project (Week 4-6)",
-          "Learn CI/CD pipelines (Week 7-8)",
-          "Study system design patterns (Week 9-12)",
-          "Prepare and obtain a cloud certification (Week 13-16)",
-        ],
-        ...(jobRequirements
-          ? {
-              match_percentage: 64,
-              matched_skills: skills.slice(0, 4).map((s) => s.name),
-              missing_skills: ["Kubernetes", "Terraform", "GraphQL"],
-              gap_analysis:
-                "Profile shows strong foundational skills but lacks cloud-native and infrastructure-as-code experience required for this role. Focus on containerization and IaC tools.",
-            }
-          : {}),
+      const profileData = {
+        full_name: profile.full_name,
+        bio: profile.bio,
+        about: profile.about,
+        github_url: profile.github_url,
+        leetcode_url: profile.leetcode_url,
+        kaggle_url: profile.kaggle_url,
+        location: profile.location,
+        skills: skills.map((s) => s.name),
+        experience: experience.map((e) => ({
+          company: e.company,
+          role: e.role,
+          duration: `${e.start_date || ""} - ${e.end_date || "Present"}`,
+          description: e.description,
+        })),
+        projects: projects.map((p) => ({
+          title: p.title,
+          description: p.description,
+          tech_stack: p.tech_stack,
+        })),
+        education: education.map((e) => ({
+          school: e.school,
+          degree: e.degree,
+          field: e.field_of_study,
+        })),
+        certificates: certificates?.map((c) => c.title) || [],
       };
 
-      setResult(demoResult);
-      return demoResult;
+      const { data, error } = await supabase.functions.invoke("analyze-ats", {
+        body: { profile: profileData, job_requirements: jobRequirements },
+      });
+
+      if (error) {
+        if (error.message?.includes("429")) {
+          toast.error("Rate limit exceeded. Please wait and try again.");
+          throw new Error("Rate limit exceeded");
+        }
+        if (error.message?.includes("402")) {
+          toast.error("AI credits exhausted. Please add funds in Settings > Workspace > Usage.");
+          throw new Error("Credits exhausted");
+        }
+        throw error;
+      }
+
+      if (data?.error) throw new Error(data.error);
+
+      // Ensure profile_summary exists with defaults
+      const atsResult: ATSResult = {
+        ...data,
+        profile_summary: data.profile_summary || {
+          bio: profile.bio || "",
+          top_skills: skills.slice(0, 6).map((s) => s.name),
+          current_projects: [],
+          certifications: { has_certs: false, list: [], summary: "" },
+          experience_highlights: [],
+        },
+      };
+
+      setResult(atsResult);
+      return atsResult;
     } catch (err: any) {
       toast.error(err.message || "Failed to analyze profile");
       return null;

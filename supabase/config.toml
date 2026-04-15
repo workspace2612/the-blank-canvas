@@ -1,0 +1,13 @@
+project_id = "ewiheasbnkiwhfbuhzhq"
+
+[functions.extract-skills]
+verify_jwt = false
+
+[functions.analyze-ats]
+verify_jwt = false
+
+[functions.fetch-streak]
+verify_jwt = false
+
+[functions.calculate-rank]
+verify_jwt = false
