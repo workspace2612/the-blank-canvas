@@ -21,14 +21,14 @@ export const useSkillExtractor = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const extractSkills = async (content: string) => {
+  const extractSkills = async (content: string, sourceType?: string) => {
     setIsLoading(true);
     setError(null);
     setResult(null);
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke("extract-skills", {
-        body: { content },
+        body: { content, source_type: sourceType },
       });
 
       if (fnError) {

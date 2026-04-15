@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface StreakData {
   github: {
@@ -21,11 +22,11 @@ interface StreakData {
 }
 
 export const useStreakData = () => {
+  const { user } = useAuth();
+
   return useQuery({
-    queryKey: ["streak-data"],
+    queryKey: ["streak-data", user?.id],
     queryFn: async (): Promise<StreakData> => {
-      // First get the user's profile to get their platform URLs
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
 
       const { data: profile } = await supabase
@@ -36,31 +37,66 @@ export const useStreakData = () => {
 
       if (!profile) throw new Error("Profile not found");
 
-      // Call the streak-extractor API
-      const response = await fetch("http://localhost:5000/analyze-profile", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      // Call the streak edge function
+      const { data, error } = await supabase.functions.invoke("fetch-streak", {
+        body: {
           github_url: profile.github_url,
           leetcode_url: profile.leetcode_url,
           kaggle_url: profile.kaggle_url,
-        }),
+        },
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch streak data");
+      if (error) {
+        if (error.message?.includes("429")) throw new Error("Rate limit exceeded");
+        if (error.message?.includes("402")) throw new Error("Credits exhausted");
+        throw error;
       }
 
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.message || "Failed to analyze profile");
+      if (!data?.success) {
+        throw new Error(data?.message || "Failed to analyze profile");
       }
 
-      return result.data;
+      // Store streak data in DB
+      const streakUpdates = [];
+      if (data.data.github) {
+        streakUpdates.push(
+          supabase.from("streaks").upsert({
+            user_id: user.id,
+            platform: "github",
+            streak_days: data.data.github.streak,
+            weekly_contributions: data.data.github.weekly_commits,
+            today_contributions: data.data.github.today_commits,
+            active_days: data.data.github.active_days,
+            total_contributions: data.data.github.weekly_commits,
+            last_fetched_at: new Date().toISOString(),
+            raw_data: data.data.github,
+          }, { onConflict: "user_id,platform" })
+        );
+      }
+      if (data.data.leetcode) {
+        streakUpdates.push(
+          supabase.from("streaks").upsert({
+            user_id: user.id,
+            platform: "leetcode",
+            streak_days: data.data.leetcode.streak,
+            weekly_contributions: data.data.leetcode.weekly_solved,
+            today_contributions: data.data.leetcode.today_solved,
+            active_days: 0,
+            total_contributions: data.data.leetcode.weekly_solved,
+            last_fetched_at: new Date().toISOString(),
+            raw_data: data.data.leetcode,
+          }, { onConflict: "user_id,platform" })
+        );
+      }
+      await Promise.all(streakUpdates);
+
+      // Trigger rank recalculation
+      supabase.functions.invoke("calculate-rank", { body: { user_id: user.id } }).catch(console.error);
+
+      return data.data;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: !!user,
+    staleTime: 5 * 60 * 1000,
     retry: 2,
   });
 };
