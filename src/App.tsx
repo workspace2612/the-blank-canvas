@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Toaster } from './components/ui/toaster';
-import { Toaster as Sonner } from "./components/ui/sonner";
+import { Toaster as Sonner } from "@/components/ui/sonner";
 
 // Pages
 import Auth from './pages/Auth';
